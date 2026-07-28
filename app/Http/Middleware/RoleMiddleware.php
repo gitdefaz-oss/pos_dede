@@ -21,7 +21,7 @@ class RoleMiddleware
                 ->withErrors('Silakan login terlebih dahulu.');
         }
 
-        $userRole = $request->user()->role;
+        $userRole = $request->user()->role->name;
 
         // jika role user tidak sesuai dengan route yang di minta
         if (!in_array($userRole, $roles)) {
