@@ -5,7 +5,7 @@
 @section('content')
 <h4>Tambah User</h4>
 
-<form action="" method="POST">
+<form action="{{ route('admin.users.store') }}" method="POST">
 @include('users._form')
 </form>
 @endsection

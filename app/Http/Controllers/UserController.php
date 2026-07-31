@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SearchRequest;
 use App\Http\Requests\User\StoreRequest;
+use App\Http\Requests\User\UpdateRequest;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -13,11 +15,18 @@ class UserController extends Controller
     /**
      * Menampilkan daftar user
      */
-    public function index()
+    public function index(SearchRequest $request)
     {
-        $users = User::latest()->paginate(10)->withQueryString();
+        $keyword = $request->input('search');
 
-        // Sesuaikan 'users.index' atau 'layouts.users.index' dengan struktur foldermu
+        if ($keyword) {
+            $users = User::whereRaw("MATCH(name, email) AGAINST(? IN BOOLEAN MODE)", [$keyword])
+                ->paginate(10)
+                ->withQueryString();
+        } else {
+            $users = User::query()->paginate(10)->withQueryString();
+        }
+
         return view('users.index', compact('users'));
     }
 
@@ -34,72 +43,57 @@ class UserController extends Controller
     /**
      * Menyimpan user baru ke database
      */
-    public function store(Request $request)
+    public function store(StoreRequest $request)
     {
-        $request->validate([
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8',
-            'role_id'  => 'required|exists:roles,id',
+        $dataReq = $request->validated();
+
+        User::create([
+            'name'     => $dataReq['name'],
+            'email'    => $dataReq['email'],
+            'password' => Hash::make($dataReq['password']),
+            'role_id'  => $dataReq['role_id'],
         ]);
 
-        User::create([                                                       
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => Hash::make($request->password),
-            'role_id'  => $request->role_id,
-        ]);
-
-        return redirect()->route('admin.users.index')->with('success', 'User berhasil ditambahkan!');
+        return redirect()->route('admin.users')->with('success', 'User berhasil ditambahkan!');
     }
 
     /**
      * Menampilkan form edit user
      */
-    public function edit(string $id)
+    public function edit(User $user)
     {
-        $user = User::findOrFail($id);
-        return view('users.edit', compact('user'));
+        $roles = Role::all();
+
+        return view('users.edit', compact('user', 'roles'));
     }
 
     /**
      * Memperbarui data user di database
      */
-    public function update(Request $request, string $id)
+    public function update(UpdateRequest $request, User $user)
     {
-        $user = User::findOrFail($id);
+        $dataReq = $request->validated();
 
-        $request->validate([
-            'name'  => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
-            'role'  => 'required|in:admin,user',
-        ]);
+        $user->name    = $dataReq['name'];
+        $user->email   = $dataReq['email'];
+        $user->role_id = $dataReq['role_id'];
 
-        $data = [
-            'name'  => $request->name,
-            'email' => $request->email,
-            'role'  => $request->role,
-        ];
-
-        // Jika password diisi, maka update password
-        if ($request->filled('password')) {
-            $request->validate(['password' => 'string|min:8']);
-            $data['password'] = Hash::make($request->password);
+        if (!empty($dataReq['password'])) {
+            $user->password = Hash::make($dataReq['password']);
         }
 
-        $user->update($data);
+        $user->save();
 
-        return redirect()->route('admin.users.index')->with('success', 'Data user berhasil diperbarui!');
+        return redirect()->route('admin.users.edit', $user->id)->with('success', 'User updated');
     }
 
     /**
      * Menghapus user dari database
      */
-    public function destroy(string $id)
+    public function destroy(User $user)
     {
-        $user = User::findOrFail($id);
         $user->delete();
 
-        return redirect()->route('admin.users.index')->with('success', 'User berhasil dihapus!');
+        return back()->with('success', 'User deleted');
     }
 }
