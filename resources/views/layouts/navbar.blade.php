@@ -15,6 +15,7 @@
       <form class="position-absolute top-50 start-100 translate-middle" action="{{ route('logout') }}" method="POST">
         @csrf
         <button type="submit" class="btn btn-danger me-2">Logout</button>
+        
       </form>
     </div>
   </div>
