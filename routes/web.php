@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProdukController;
 use App\Http\Controllers\UserController;
 
 // Route yang bisa diakses ketika user belum login
@@ -17,20 +18,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::prefix('admin')->name('admin.')->group(function () {
+        // Route Management User
         Route::get('/users', [UserController::class, 'index'])->name('users');
         Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
         Route::post('/users/store', [UserController::class, 'store'])->name('users.store');
-
-        // --- PERBAIKAN DI SINI ---
-        // 1. Tampil Halaman Edit (GET)
         Route::get('/users/edit/{user}', [UserController::class, 'edit'])->name('users.edit');
-        
-        // 2. Simpan Perubahan/Update (PUT)
         Route::put('/users/update/{user}', [UserController::class, 'update'])->name('users.update');
-        
-        // 3. Proses Hapus Data (DELETE)
         Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
-        Route::post('/users/update/{user}', [UserController::class, 'update'])->name('users.update');
-        Route::delete('/users/destroy/{user}', [UserController::class, 'destroy'])->name('users.destroy');
-    });
+
+        
+        Route::resource('produk', ProdukController::class);
+    }); 
 });
