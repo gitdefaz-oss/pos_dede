@@ -19,15 +19,15 @@ class UserController extends Controller
     {
         $keyword = $request->input('search');
 
-        if ($keyword) {
-            $users = User::whereRaw("MATCH(name, email) AGAINST(? IN BOOLEAN MODE)", [$keyword])
-                ->paginate(10)
-                ->withQueryString();
-        } else {
-            $users = User::query()->paginate(10)->withQueryString();
-        }
+        // Menggunakan LIKE agar pencarian fleksibel dan tidak butuh FULLTEXT index
+        $users = User::when($keyword, function ($query, $keyword) {
+            return $query->where('name', 'like', "%{$keyword}%")
+                         ->orWhere('email', 'like', "%{$keyword}%");
+        })
+        ->paginate(10)
+        ->withQueryString();
 
-        return view('users.index', compact('users'));
+        return view('admin.users.index', compact('users'));
     }
 
     /**
