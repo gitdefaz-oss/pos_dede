@@ -19,19 +19,16 @@ class PenjualanController extends Controller
         $keyword = $request->input('search');
 
         $sales = Penjualan::query()
-
             // 🔒 Filter berdasarkan role
             ->when($user->role->name === 'kasir', function ($query) use ($user) {
                 $query->where('user_id', $user->id);
             })
-
             // 🔍 Search nama user
             ->when($keyword, function ($query) use ($keyword) {
                 $query->whereHas('user', function ($q) use ($keyword) {
                     $q->where('name', 'like', '%' . $keyword . '%');
                 });
             })
-
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -42,21 +39,27 @@ class PenjualanController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request) // 👈 PERBAIKAN: Tambahkan Request $request
     {
         $sale = Penjualan::firstOrCreate(
             [
                 'user_id' => Auth::id(),
-                'status' => 'OPEN'
+                'status'  => 'OPEN'
             ],
             [
-                'total_pembayaran' => 0,
+                'total_pembayaran'  => 0,
                 'metode_pembayaran' => 'CASH'
             ]
         );
 
-        // ✅ Diubah dari 'name' ke 'nama' sesuai nama kolom tabel produk di database
-        $products = Produk::orderBy('nama')->get();
+        //
+        $keyword = $request->input('search');
+        $products = Produk::when($keyword, function ($query) use ($keyword) {
+                $query->where('nama', 'like', '%' . $keyword . '%');
+            })
+            ->orderBy('nama')
+            ->get();
+
         $mode = 'create';
 
         return view('penjualan.pos', compact('sale', 'products', 'mode'));
