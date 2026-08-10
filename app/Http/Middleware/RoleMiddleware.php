@@ -15,18 +15,22 @@ class RoleMiddleware
      */
     public function handle(Request $request, Closure $next, ...$roles) : Response
     {
-        // cek apakah pengguna sudah login
-        if (!$request->user()) {
+        $user = $request->user();
+
+        // 1. Cek apakah pengguna sudah login
+        if (!$user) {
             return redirect()->route('login')
-                ->withErrors('Silakan login terlebih dahulu.');
+                ->with('error', 'Silakan login terlebih dahulu.');
         }
 
-        $userRole = $request->user()->role->name;
+        // 2. Ambil nama role secara aman (mencegah eror jika relasi role null)
+        $userRole = $user->role->name ?? null;
 
-        // jika role user tidak sesuai dengan route yang di minta
-        if (!in_array($userRole, $roles)) {
-            abort(403, 'Unauthorized');
+        // 3. Jika role user tidak sesuai dengan parameter middleware
+        if (!$userRole || !in_array($userRole, $roles)) {
+            abort(403, 'Anda tidak memiliki hak akses untuk halaman ini.');
         }
+
         return $next($request);
     }
 }

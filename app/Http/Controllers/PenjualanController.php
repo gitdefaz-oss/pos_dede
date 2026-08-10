@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SearchRequest;
+use App\Models\ItemPenjualan; 
 use App\Models\Penjualan;
 use App\Models\Produk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PenjualanController extends Controller
 {
@@ -39,7 +42,7 @@ class PenjualanController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(Request $request) // 👈 PERBAIKAN: Tambahkan Request $request
+    public function create(Request $request)
     {
         $sale = Penjualan::firstOrCreate(
             [
@@ -52,11 +55,10 @@ class PenjualanController extends Controller
             ]
         );
 
-        //
         $keyword = $request->input('search');
         $products = Produk::when($keyword, function ($query) use ($keyword) {
-                $query->where('nama', 'like', '%' . $keyword . '%');
-            })
+            $query->where('nama', 'like', '%' . $keyword . '%');
+        })
             ->orderBy('nama')
             ->get();
 
@@ -76,7 +78,7 @@ class PenjualanController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Penjualan $penjualan)
     {
         //
     }
@@ -84,7 +86,7 @@ class PenjualanController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id)
+    public function edit(Penjualan $penjualan)
     {
         //
     }
@@ -92,16 +94,80 @@ class PenjualanController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, ItemPenjualan $itempenjualan)
     {
-        //
+        $request->validate([
+            'quantity' => 'required|integer|min:1'
+        ]);
+
+        DB::transaction(function () use ($request, $itempenjualan) {
+
+            $produk = $itempenjualan->produk()->lockForUpdate()->first();
+
+            $selisih = $request->quantity - $itempenjualan->kuantitas;
+
+            // Jika qty bertambah -> kurangi stok
+            if ($selisih > 0) {
+                if ($produk->stok < $selisih) {
+                    // Throw ValidationException agar transaksi otomatis ROLLBACK
+                    throw ValidationException::withMessages([
+                        'quantity' => 'Stok produk tidak mencukupi.'
+                    ]);
+                }
+                $produk->decrement('stok', $selisih);
+            }
+
+            // Jika qty berkurang -> kembalikan stok
+            if ($selisih < 0) {
+                $produk->increment('stok', abs($selisih));
+            }
+
+            // Update item
+            $itempenjualan->update([
+                'kuantitas' => $request->quantity,
+                'subtotal'  => $request->quantity * $itempenjualan->harga_satuan
+            ]);
+
+            // Update total penjualan
+            $itempenjualan->penjualan->update([
+                'total_pembayaran' => $itempenjualan->penjualan->itemPenjualan()->sum('subtotal')
+            ]);
+        });
+
+        return back()->with('success', 'Jumlah item berhasil diperbarui');
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Penjualan $penjualan)
     {
-        //
+        // ! Pastikan hanya transaksi OPEN
+        if ($penjualan->status !== 'OPEN') {
+            return redirect()->route('penjualan.create')->with('error', 'Transaksi sudah selesai tidak bisa dibatalkan');
+        }
+
+        // ! Pastikan milik user login (kasir)
+        if ($penjualan->user_id !== Auth::id()) {
+            return redirect()->route('penjualan.create');
+        }
+
+        DB::transaction(function () use ($penjualan) {
+
+            foreach ($penjualan->itemPenjualan as $item) {
+                // Kembalikan stok
+                $item->produk->increment('stok', $item->kuantitas);
+            }
+
+            // Hapus item
+            $penjualan->itemPenjualan()->delete();
+
+            // Hapus penjualan
+            $penjualan->delete();
+        });
+
+        return redirect()
+            ->route('penjualan.index')
+            ->with('success', 'Transaksi berhasil dibatalkan');
     }
 }

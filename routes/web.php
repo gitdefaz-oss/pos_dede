@@ -8,17 +8,18 @@ use App\Http\Controllers\PenjualanController;
 use App\Http\Controllers\ProdukController;
 use App\Http\Controllers\UserController;
 
-// Route yang bisa diakses ketika user belum login
+// Route Guest
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'index'])->name('login');
     Route::post('/auth', [AuthController::class, 'authenticate'])->name('auth');
 });
 
-// Route yang bisa diakses ketika user sudah login
+// Route Auth
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+    // Admin Only
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users');
         Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
@@ -28,10 +29,12 @@ Route::middleware('auth')->group(function () {
         Route::delete('/users/destroy/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     });
 
+    // Admin & Kasir
     Route::middleware('role:admin,kasir')->group(function () {
-        Route::resource('/produk', ProdukController::class);
-        Route::resource('/penjualan', PenjualanController::class);
+        Route::resource('produk', ProdukController::class);
+        Route::resource('penjualan', PenjualanController::class);
         Route::resource('itempenjualan', ItemPenjualanController::class);
-        });
-    });
 
+        Route::post('/penjualan/{penjualan}/checkout', [PenjualanController::class, 'checkout'])->name('penjualan.checkout');
+    });
+});
